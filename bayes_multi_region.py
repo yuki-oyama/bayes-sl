@@ -264,7 +264,7 @@ class SpatialLogit(object):
             den = den - np.max(den)
             x = np.exp(den)
             isum = np.sum(
-                (y[1:] + y[:-1]) * (x[1:] + x[:-1]) / 2
+                (y[1:] - y[:-1]) * (x[1:] + x[:-1]) / 2
             )
             z = np.abs(x/isum)
             den = np.cumsum(z)
@@ -284,8 +284,12 @@ class SpatialLogit(object):
                     posty[n][:,:,s] = mu / (1 + mu)
                     postom[n][:,:,s] = curr.om[n]
 
+        self.post_beta = postb
+        self.post_rho = postr
+        self.post_y = posty
         return postb, postr, posty, postom
 
+# %%
 if __name__ == '__main__':
     # Read data
     areas = ['kiyosumi'] #, 'kiba'
@@ -380,6 +384,35 @@ if __name__ == '__main__':
     for b, m, s, cred, name in zip(beta_mean_hat, beta_median_hat, beta_std_hat, beta_cred_hat, spl.freebetaNames):
         print(f'{name} \t {b} \t {m} \t {s} \t {cred}')
         summary += f'{name} \t {b} \t {m} \t {s} \t {cred} \n'
+
+
+    # %%
+    ## Prediction
+    # policy variables: test building +20, road -20
+    spl.x_st['kiyosumi'][2] += 20
+    spl.x_st['kiyosumi'][3] -= 20
+    spl.x['kiyosumi'] = [xs[np.newaxis,:] * xu[:,np.newaxis] for xs, xu in zip(spl.x_st['kiyosumi'], spl.x_user['kiyosumi'])]
+    spl.x['kiyosumi'] = np.array(spl.x['kiyosumi']).transpose(2,1,0) # K length of (N x S) -> S x N x K
+
+    # calculate new probability: using all realizations from posterior (n_retain)
+    dim = (*spl.x['kiyosumi'].shape[:2],)
+    I = sp.identity(dim[0], format='csc')
+    newp = np.zeros((*dim, postb.shape[-1]), dtype=np.float)
+    for r in range(postb.shape[-1]):
+        rho = postr[r]
+        beta = postb[:,r]
+        AI = splinalg.inv(I - rho * spl.W['kiyosumi'])
+        MU = AI @ (spl.x['kiyosumi'] @ beta + np.random.normal(size=dim))
+        p = 1 / (1 + np.exp(-MU))
+        newp[:,:,r] = p
+
+    # calculate mean and credible intervals
+    mean_newp = np.mean(newp, axis=(0,1))
+    mean_p = np.mean(y, axis=(0,1))
+    mean_newp.mean()
+    mean_p.mean()
+    np.percentile(mean_newp, [2.5, 97.5])
+    np.percentile(mean_p, [2.5, 97.5])
 
     # with open('model/sar_logit/results/bayes_20000/summary.csv', 'w') as f:
     #     f.write(summary)
