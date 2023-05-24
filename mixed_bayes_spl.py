@@ -195,6 +195,7 @@ def spatial_logit(
         post_alpha_mean = post_alpha_var @ (alpha_prior_var_inv @ alpha_prior_mean + AiXfz)
         post_alpha_mean = np.array(post_alpha_mean).reshape(-1,)
         curr.alpha = np.random.multivariate_normal(mean=post_alpha_mean, cov=post_alpha_var)
+        # curr.alpha = post_alpha_mean + np.linalg.cholesky(post_alpha_var) @ np.random.randn(Kf,)
         curr.invSigma = np.linalg.inv(curr.Sigma)
         curr.beta = np.zeros((N,Kr), dtype=np.float)
         for n in range(N):
