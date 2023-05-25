@@ -8,10 +8,16 @@ from tqdm import tqdm
 class spLogit(object):
 
     def __init__(self,
-            seed,
-            nInd, nSpc,
-            nFix, nRnd,
-            x, y, W,
+            seed = 123,
+            nInd = None,
+            nSpc = None,
+            nFix = None,
+            nRnd = None,
+            x = None,
+            y = None,
+            W = None,
+            xFixName = None,
+            xRndName = None,
             A = 1.04,
             nu = 2.,
             rho_a = 1.01,
@@ -29,13 +35,15 @@ class spLogit(object):
         self.nRnd = nRnd
         # variables
         self.x = x
-        self.xFix = x[:,:,:nFix]
-        self.xRnd = x[:,:,nFix:]
+        self.xFix = x[:,:,:nFix] if x is not None else None
+        self.xRnd = x[:,:,nFix:] if x is not None else None
+        self.xFixName = xFixName
+        self.xRndName = xRndName
         self.y = y
-        self.kappa = y - 1/2
+        self.kappa = y - 1/2 if y is not None else None
         # spatial matrix
         self.W = W
-        self.I = sp.identity(nSpc, format='csc')
+        self.I = sp.identity(nSpc, format='csc') if nSpc is not None else None
         # hyperparameters
         self.invAsq = A**(-2)
         self.nu = nu
@@ -49,6 +57,24 @@ class spLogit(object):
         self.priVarFix = priVarFix
         # function
         self.beta_prob = lambda rho, a: 1/beta(a,a) * ((1 + rho)**(a-1) * (1 - rho)**(a-1)) / (2**(2*a - 1))
+
+    def load_data_from_spData(self, spData):
+        # numbers
+        self.nInd = spData['nInd']
+        self.nSpc = spData['nSpc']
+        self.nFix = spData['nFix']
+        self.nRnd = spData['nRnd']
+        # variables
+        self.x = spData['x']
+        self.xFix = self.x[:,:,:self.nFix]
+        self.xRnd = self.x[:,:,self.nFix:]
+        self.xFixName = spData['xFixName']
+        self.xRndName = spData['xRndName']
+        self.y = spData['y']
+        self.kappa = self.y - 1/2
+        # spatial matrix
+        self.W = spData['W']
+        self.I = sp.identity(self.nSpc, format='csc')
 
     def update_omega(self):
         mu = np.einsum('nsk,nk->ns', self.AiX, self.paramAll)
@@ -206,24 +232,34 @@ class spLogit(object):
         postRes = {}
         postRes['rho'] = self.get_postStats(post_rho)
         if self.nFix > 0:
-            postRes['paramFix'] = self.get_postStats(post_paramFix)
+            # postRes['paramFix'] = self.get_postStats(post_paramFix)
+            for k, paramName in enumerate(self.xFixName):
+                postRes[paramName + 'Fix'] = self.get_postStats(post_paramFix[:,k])
         if self.nRnd > 0:
-            postRes['zeta'] = self.get_postStats(post_zeta)
-            postRes['Sigma'] = self.get_postStats(post_Sigma)
-            # paramRnd
-            dim = (0,1)
+            # postRes['zeta'] = self.get_postStats(post_zeta)
+            # postRes['Sigma'] = self.get_postStats(post_Sigma)
+            dim = 1 # over individuals
             postMean = np.mean(post_paramRnd, axis = dim)
-            postQl, postQr = np.quantile(post_paramRnd, [0.025, 0.975], axis = dim)
             postStd = np.std(post_paramRnd, axis = dim)
-            paramRndFlat = post_paramRnd.reshape(-1, self.nRnd)
-            postCorr = np.corrcoef(paramRndFlat[:,0], paramRndFlat[:,1])
-            postRes['paramRnd'] = {
-                'mean': postMean,
-                'std. dev.': postStd,
-                '2.5%': postQl,
-                '97.5%': postQr,
-                'corr.': postCorr
-            }
+            for k, paramName in enumerate(self.xRndName):
+                postRes[paramName + 'Zeta'] = self.get_postStats(post_zeta[:,k])
+                postRes[paramName + 'RndMean'] = self.get_postStats(postMean[:,k])
+                postRes[paramName + 'RndStd'] = self.get_postStats(postStd[:,k])
+
+            # paramRnd
+            # dim = (0,1)
+            # postMean = np.mean(post_paramRnd, axis = dim)
+            # postQl, postQr = np.quantile(post_paramRnd, [0.025, 0.975], axis = dim)
+            # postStd = np.std(post_paramRnd, axis = dim)
+            # paramRndFlat = post_paramRnd.reshape(-1, self.nRnd)
+            # postCorr = np.corrcoef(paramRndFlat[:,0], paramRndFlat[:,1])
+            # postRes['paramRnd'] = {
+            #     'mean': postMean,
+            #     'std. dev.': postStd,
+            #     '2.5%': postQl,
+            #     '97.5%': postQr,
+            #     'corr.': postCorr
+            # }
         return postRes
 
     def get_postStats(self, postParam):

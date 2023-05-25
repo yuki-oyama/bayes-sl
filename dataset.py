@@ -110,27 +110,28 @@ class spDataset(object):
         """Auguments:
         f_keys: list of (feature_name, spc_attribute_name, ind_char_name, isFixVar)
         """
-        self.xFix_names = []
-        self.xRnd_names = []
         nFix = sum([isFix for (_, _, _, isFix) in features])
         nRnd = len(features) - nFix
         for area in self.areas:
             d = self.datasets[area]
             nInd, nSpc = d['nInd'], d['nSpc']
             xFix, xRnd = [], []
+            xFix_names, xRnd_names = [], []
             for f_name, satt, ichar, isFix in features:
                 x_sp = np.ones(nSpc) if satt is None else d['xSpc'][satt].values # (S,1)
                 x_ind = np.ones(nInd) if ichar is None else d['xInd'][ichar].values # (N,1)
                 if isFix:
                     xFix.append(x_ind[:, np.newaxis] * x_sp[np.newaxis, :]) # (N, S)
-                    self.xFix_names.append(f_name)
+                    xFix_names.append(f_name)
                 else:
                     xRnd.append(x_ind[:, np.newaxis] * x_sp[np.newaxis, :]) # (N, S)
-                    self.xRnd_names.append(f_name)
+                    xRnd_names.append(f_name)
             xFix = np.stack(xFix).transpose(1,2,0) # (N, S, nFix)
             xRnd = np.stack(xRnd).transpose(1,2,0) # (N, S, nRnd)
             x = np.concatenate([xFix, xRnd], axis=2) # (N, S, nFix+nRnd)
-            d.update({'x': x, 'xFix': xFix, 'xRnd': xRnd, 'nFix': nFix, 'nRnd': nRnd})
+            d.update({
+                'x': x, 'xFix': xFix, 'xRnd': xRnd, 'nFix': nFix, 'nRnd': nRnd,
+                'xFixName': xFix_names, 'xRndName': xRnd_names})
             self.datasets[area] = d
 
 # %%

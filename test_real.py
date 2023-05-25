@@ -18,18 +18,18 @@ for area in areas:
 # %%
 features = [
     ('intercept', None, None, 0),
-    ('c_tree', 'tree', None, 1),
-    ('c_bldg', 'building', None, 1),
-    ('c_road', 'road', None, 1),
-    ('c_sky', 'sky', None, 1),
-    ('b_river', 'inner_river_0', None, 1),
-    ('b_avenue', 'inner_avenue_0', None, 1),
-    ('b_area', 'inner_area', 'resident', 1),
-    ('b_dist_base', 'distance_km', None, 0),
-    ('a_10under', 'distance_km', 'Under_10_years', 1),
-    ('a_1under', 'distance_km', 'Under_1_day', 1),
-    ('a_female', 'distance_km', 'female', 1),
-    ('a_40up', 'distance_km', 'Upper_40', 1)
+    ('Tree', 'tree', None, 0),
+    ('Bldg', 'building', None, 0),
+    ('Road', 'road', None, 0),
+    ('Sky', 'sky', None, 0),
+    ('InRiver', 'inner_river_0', None, 1),
+    ('InAvenue', 'inner_avenue_0', None, 1),
+    ('InArea', 'inner_area', 'resident', 1),
+    ('Dist', 'distance_km', None, 0),
+    ('DistRes10under', 'distance_km', 'Under_10_years', 1),
+    ('DistFreq1under', 'distance_km', 'Under_1_day', 1),
+    ('DistFemale', 'distance_km', 'female', 1),
+    ('Dist40up', 'distance_km', 'Upper_40', 1)
 ]
 sp_data.set_features(features)
 
@@ -39,10 +39,16 @@ rho_a = 1.01
 A = 1.04
 nu = 2
 d = sp_data.datasets['kiyosumi']
-splogit = spLogit(seed,
-            d['nInd'], d['nSpc'], d['nFix'], d['nRnd'], d['x'], d['y'], d['W'],
-            A, nu, rho_a)
+splogit = spLogit(seed=seed, A=A, nu=nu, rho_a=rho_a)
+splogit.load_data_from_spData(d)
+# d['nInd'], d['nSpc'], d['nFix'], d['nRnd'], d['x'], d['y'], d['W'],
+
+# %%
 post_params = splogit.estimate(nIter=2000, nIterBurn=1000, nGrid=100)
+
+# %%
+dfRes = pd.DataFrame(post_params[0]).T
+dfRes
 
 # %%
 post_paramFix, post_paramRnd, post_zeta, post_iwDiagA, post_Sigma, post_rho, post_y, post_omega = post_params

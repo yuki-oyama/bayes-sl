@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 import scipy.sparse as sp
 from scipy.sparse import csr_matrix, csc_matrix
@@ -46,19 +47,19 @@ if __name__ == '__main__':
     nInd, nSpc = 50, 200
     nFix, nRnd = 4, 2
     x, xFix, xRnd, y, W = generate_data(nInd, nSpc)
+    xFixName = [f'alpha{str(i+1)}' for i in range(nFix)]
+    xRndName = [f'beta{str(i+1)}' for i in range(nRnd)]
 
     # %%
     seed = 111
     rho_a = 1.01
     A = 1.04
     nu = 2
-    splogit = spLogit(seed, nInd, nSpc, nFix, nRnd, x, y, W)
+    splogit = spLogit(seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
 
     # %%
     postRes, modelFits = splogit.estimate(nIter=500, nIterBurn=250, nGrid=20)
 
     # %%
-    for paramName, stats in postRes.items():
-        print(paramName)
-        for statName, stat in stats.items():
-            print(statName, stat)
+    dfRes = pd.DataFrame(postRes).T
+    dfRes
