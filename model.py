@@ -222,9 +222,17 @@ class spLogit(object):
                 post_omega[s] = self.omega
                 post_y[s] = np.exp(mu) / (1 + np.exp(mu))
 
+        postParams = {
+            'rho': post_rho,
+            'paramFix': post_paramFix,
+            'paramRnd': post_paramRnd,
+            'zeta': post_zeta,
+            'Sigma': post_Sigma,
+            'y': post_y,
+        }
         postRes = self.analyze_posterior(post_rho, post_paramFix, post_paramRnd, post_zeta, post_Sigma)
         modelFits = self.evaluate_modelfit(post_y)
-        return postRes, modelFits
+        return postRes, modelFits, postParams
 
     def analyze_posterior(self,
             post_rho, post_paramFix, post_paramRnd,
@@ -242,10 +250,9 @@ class spLogit(object):
             postMean = np.mean(post_paramRnd, axis = dim)
             postStd = np.std(post_paramRnd, axis = dim)
             for k, paramName in enumerate(self.xRndName):
-                postRes[paramName + 'Zeta'] = self.get_postStats(post_zeta[:,k])
+                # postRes[paramName + 'Zeta'] = self.get_postStats(post_zeta[:,k])
                 postRes[paramName + 'RndMean'] = self.get_postStats(postMean[:,k])
                 postRes[paramName + 'RndStd'] = self.get_postStats(postStd[:,k])
-
             # paramRnd
             # dim = (0,1)
             # postMean = np.mean(post_paramRnd, axis = dim)

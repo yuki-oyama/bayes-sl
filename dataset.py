@@ -112,6 +112,8 @@ class spDataset(object):
         """
         nFix = sum([isFix for (_, _, _, isFix) in features])
         nRnd = len(features) - nFix
+        self.nFix = nFix
+        self.nRnd = nRnd
         for area in self.areas:
             d = self.datasets[area]
             nInd, nSpc = d['nInd'], d['nSpc']
@@ -134,22 +136,61 @@ class spDataset(object):
                 'xFixName': xFix_names, 'xRndName': xRnd_names})
             self.datasets[area] = d
 
-# %%
-sp_data = spDataset()
-areas = ['kiyosumi', 'kiba']
-for area in areas:
-    user_df = pd.read_csv(f'dataset/users_{area}.csv').set_index('user')
-    street_df = pd.read_csv(f'dataset/streets_{area}.csv').set_index('street_id')
-    angle_df = pd.read_csv(f'dataset/incidence_angle_{area}.csv')
-    choice_df = pd.read_csv(f'dataset/choice_{area}.csv', index_col=0)
-    dist_df = pd.read_csv(f'dataset/distance_matrix_{area}.csv', index_col=0)
-    sp_data.set_data(area, user_df, street_df, choice_df, dist_df, angle_df)
+    def merge_data(self):
+        Ns = [0] + [self.datasets[area]['nInd'] for area in self.areas]
+        Ss = [0] + [self.datasets[area]['nSpc'] for area in self.areas]
+        nInd, nSpc = sum(Ns), sum(Ss)
+        W = np.zeros((nSpc, nSpc), dtype=np.float64)
+        y = np.zeros((nInd, nSpc))
+        xFix = np.zeros((nInd, nSpc, self.nFix), dtype=np.float64)
+        xRnd = np.zeros((nInd, nSpc, self.nRnd), dtype=np.float64)
+        for a, area in enumerate(self.areas):
+            d = self.datasets[area]
+            nFrom, nTo = sum(Ns[:a+1]), sum(Ns[:a+2])
+            sFrom, sTo = sum(Ss[:a+1]), sum(Ss[:a+2])
+            W[sFrom:sTo, sFrom:sTo] = d['W'].toarray()
+            y[nFrom:nTo, sFrom:sTo] = d['y']
+            xFix[nFrom:nTo, sFrom:sTo, :] = d['xFix']
+            xRnd[nFrom:nTo, sFrom:sTo, :] = d['xRnd']
+        x = np.concatenate([xFix, xRnd], axis=2) # (N, S, nFix+nRnd)
+        # store All
+        self.areas.append('All')
+        self.datasets['All'] = {
+                'nInd': nInd,
+                'nSpc': nSpc,
+                'y': y,
+                'W': csr_matrix(W),
+                'x': x, 'xFix': xFix, 'xRnd': xRnd,
+                'nFix': d['nFix'], 'nRnd': d['nRnd'],
+                'xFixName': d['xFixName'], 'xRndName': d['xRndName']
+                }
+
 
 # %%
-features = [
-    ('intercept', None, None, 1),
-    ('tree', 'tree', None, 1),
-    ('dist', 'distance_km', None, 0),
-]
-sp_data.set_features(features)
-sp_data.datasets['kiba']['xRnd'].shape
+if __name__ == '__main__':
+    sp_data = spDataset()
+    areas = ['kiyosumi', 'kiba']
+    for area in areas:
+        user_df = pd.read_csv(f'dataset/users_{area}.csv').set_index('user')
+        street_df = pd.read_csv(f'dataset/streets_{area}.csv').set_index('street_id')
+        angle_df = pd.read_csv(f'dataset/incidence_angle_{area}.csv')
+        choice_df = pd.read_csv(f'dataset/choice_{area}.csv', index_col=0)
+        dist_df = pd.read_csv(f'dataset/distance_matrix_{area}.csv', index_col=0)
+        sp_data.set_data(area, user_df, street_df, choice_df, dist_df, angle_df)
+
+    # %%
+    features = [
+        ('intercept', None, None, 1),
+        ('tree', 'tree', None, 1),
+        ('dist', 'distance_km', None, 0),
+    ]
+    sp_data.set_features(features)
+    sp_data.datasets['kiba']['xRnd'].shape
+
+    # %%
+    sp_data.datasets['kiba']['W'].shape
+    sp_data.datasets['kiyosumi']['W'].shape
+
+    # %%
+    sp_data.merge_data()
+    sp_data.datasets['All']['W'].shape

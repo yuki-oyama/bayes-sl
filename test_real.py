@@ -32,36 +32,24 @@ features = [
     ('Dist40up', 'distance_km', 'Upper_40', 1)
 ]
 sp_data.set_features(features)
+sp_data.merge_data()
 
 # %%
 seed = 111
 rho_a = 1.01
 A = 1.04
 nu = 2
-d = sp_data.datasets['kiyosumi']
-splogit = spLogit(seed=seed, A=A, nu=nu, rho_a=rho_a)
-splogit.load_data_from_spData(d)
-# d['nInd'], d['nSpc'], d['nFix'], d['nRnd'], d['x'], d['y'], d['W'],
+dfs = []
+areas_est = ['All']
+for area in areas_est:
+    d = sp_data.datasets[area]
+    splogit = spLogit(seed=seed, A=A, nu=nu, rho_a=rho_a)
+    splogit.load_data_from_spData(d)
+    postRes, modelFits, postParams = splogit.estimate(nIter=2000, nIterBurn=1000, nGrid=100)
+    dfRes = pd.DataFrame(postRes).T
+    print(dfRes)
+    dfs.append(dfRes)
 
 # %%
-post_params = splogit.estimate(nIter=2000, nIterBurn=1000, nGrid=100)
-
-# %%
-dfRes = pd.DataFrame(post_params[0]).T
-dfRes
-
-# %%
-post_paramFix, post_paramRnd, post_zeta, post_iwDiagA, post_Sigma, post_rho, post_y, post_omega = post_params
-### calculate posterior mean of beta and sigma
-alpha_mean_hat = np.mean(post_paramFix, axis=0)
-zeta_mean_hat = np.mean(post_zeta, axis=0)
-sigma_mean_hat = np.mean(post_Sigma, axis=0)
-y_mean_hat = np.mean(post_y, axis=0)
-rho_post_mean = np.mean(post_rho)
-# error = np.mean(Y - y_mean_hat)
-ic(alpha_mean_hat)
-ic(zeta_mean_hat)
-ic(rho_post_mean)
-ic(sigma_mean_hat)
-
-sp_data.xRnd_names
+dfs[0].to_csv('all_iter2000_burn1000_grid100.csv', index=True)
+# dfs[1].to_csv('kiba_iter20000_burn10000_grid100.csv', index=True)
