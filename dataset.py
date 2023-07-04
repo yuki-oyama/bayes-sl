@@ -128,9 +128,16 @@ class spDataset(object):
                 else:
                     xRnd.append(x_ind[:, np.newaxis] * x_sp[np.newaxis, :]) # (N, S)
                     xRnd_names.append(f_name)
-            xFix = np.stack(xFix).transpose(1,2,0) # (N, S, nFix)
-            xRnd = np.stack(xRnd).transpose(1,2,0) # (N, S, nRnd)
-            x = np.concatenate([xFix, xRnd], axis=2) # (N, S, nFix+nRnd)
+            if nFix > 0:
+                xFix = np.stack(xFix).transpose(1,2,0) # (N, S, nFix)
+            else:
+                x = xRnd
+            if nRnd > 0:
+                xRnd = np.stack(xRnd).transpose(1,2,0) # (N, S, nRnd)
+            else:
+                x = xFix
+            if nFix * nRnd > 0:
+                x = np.concatenate([xFix, xRnd], axis=2) # (N, S, nFix+nRnd)
             d.update({
                 'x': x, 'xFix': xFix, 'xRnd': xRnd, 'nFix': nFix, 'nRnd': nRnd,
                 'xFixName': xFix_names, 'xRndName': xRnd_names})
@@ -171,11 +178,11 @@ if __name__ == '__main__':
     sp_data = spDataset()
     areas = ['kiyosumi', 'kiba']
     for area in areas:
-        user_df = pd.read_csv(f'dataset/users_{area}.csv').set_index('user')
-        street_df = pd.read_csv(f'dataset/streets_{area}.csv').set_index('street_id')
-        angle_df = pd.read_csv(f'dataset/incidence_angle_{area}.csv')
-        choice_df = pd.read_csv(f'dataset/choice_{area}.csv', index_col=0)
-        dist_df = pd.read_csv(f'dataset/distance_matrix_{area}.csv', index_col=0)
+        user_df = pd.read_csv(f'data/users_{area}.csv').set_index('user')
+        street_df = pd.read_csv(f'data/streets_{area}.csv').set_index('street_id')
+        angle_df = pd.read_csv(f'data/incidence_angle_{area}.csv')
+        choice_df = pd.read_csv(f'data/choice_{area}.csv', index_col=0)
+        dist_df = pd.read_csv(f'data/distance_matrix_{area}.csv', index_col=0)
         sp_data.set_data(area, user_df, street_df, choice_df, dist_df, angle_df)
 
     # %%

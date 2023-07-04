@@ -27,7 +27,10 @@ class spLogit(object):
             rho_init = 0.,
             priMuFix = None,
             priVarFix = None,
+            spatialLag = True,
             ):
+        # model
+        self.spatialLag = spatialLag
         # numbers
         self.nInd = nInd
         self.nSpc = nSpc
@@ -179,15 +182,17 @@ class spLogit(object):
             self.priInvVarFix = sp.linalg.inv(self.priVarFix)
 
         # pre-computation for griddy gibbs
-        self.AiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
-        self.yAiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
-        self.rhos = np.linspace(-1, 1, nGrid + 2)
-        self.rhos = self.rhos[1:-1]
-        for i in tqdm(range(nGrid)):
-            A = self.I - self.rhos[i] * self.W
-            invA = sp.linalg.inv(A).toarray()
-            self.AiXs[i] = np.einsum('ij,njk->nik', invA, self.x)
-            self.yAiXs[i] = self.y[:,:,np.newaxis] * self.AiXs[i]
+        print("Pre-computation for Griddy Gibbs")
+        if self.spatialLag:
+            self.AiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
+            self.yAiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
+            self.rhos = np.linspace(-1, 1, nGrid + 2)
+            self.rhos = self.rhos[1:-1]
+            for i in tqdm(range(nGrid)):
+                A = self.I - self.rhos[i] * self.W
+                invA = sp.linalg.inv(A).toarray()
+                self.AiXs[i] = np.einsum('ij,njk->nik', invA, self.x)
+                self.yAiXs[i] = self.y[:,:,np.newaxis] * self.AiXs[i]
 
         # initialization
         self.paramFix = self.paramFix_inits
@@ -196,10 +201,11 @@ class spLogit(object):
         self.invSigma = np.linalg.inv(self.Sigma)
         self.paramRnd = np.tile(self.zeta, (self.nInd, 1))
         self.paramAll = np.concatenate([np.tile(self.paramFix, (self.nInd,1)), self.paramRnd], axis=1)
-        self.rho = self.rhos[nGrid//2]
-        self.AiX = self.AiXs[nGrid//2]
+        self.rho = self.rhos[nGrid//2] if self.spatialLag else 0.
+        self.AiX = self.AiXs[nGrid//2] if self.spatialLag else self.x
 
         # estimation
+        print("Estimation")
         for iter in tqdm(range(nIter)):
             if self.nRnd > 0:
                 self.update_iwDiagA()
@@ -207,7 +213,8 @@ class spLogit(object):
                 self.update_zeta()
             self.update_omega()
             self.update_paramFixRnd()
-            self.update_rho()
+            if self.spatialLag:
+                self.update_rho()
             if iter >= nIterBurn:
                 s = iter - nIterBurn
                 mu = np.einsum('nsk,nk->ns', self.AiX, self.paramAll)

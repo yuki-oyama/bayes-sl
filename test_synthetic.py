@@ -46,20 +46,27 @@ if __name__ == '__main__':
     # generate synthetic data
     nInd, nSpc = 50, 200
     nFix, nRnd = 4, 2
-    x, xFix, xRnd, y, W = generate_data(nInd, nSpc)
     xFixName = [f'alpha{str(i+1)}' for i in range(nFix)]
     xRndName = [f'beta{str(i+1)}' for i in range(nRnd)]
+    rhos = [0.2] #[-0.9 + i*0.1 for i in range(19)]
 
     # %%
-    seed = 111
-    rho_a = 1.01
-    A = 1.04
-    nu = 2
-    splogit = spLogit(seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
+    res = {}
+    for rho in rhos:
+        x, xFix, xRnd, y, W = generate_data(nInd, nSpc, rho=rho)
+
+        seed = 111
+        rho_a = 1.01
+        A = 1.04
+        nu = 2
+        splogit = spLogit(seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
+
+        postRes, modelFits, postParams = splogit.estimate(nIter=1000, nIterBurn=500, nGrid=100)
+
+        dfRes = pd.DataFrame(postRes).T
+        # dfRes
+        res[rho] = dfRes['mean']
 
     # %%
-    postRes, modelFits = splogit.estimate(nIter=500, nIterBurn=250, nGrid=20)
-
-    # %%
-    dfRes = pd.DataFrame(postRes).T
-    dfRes
+    # resDf = pd.DataFrame(res)
+    # resDf.to_csv('results/synthetic/res_iter10000_burn5000.csv', index=True)
