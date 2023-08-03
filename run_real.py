@@ -37,6 +37,10 @@ model_arg.add_argument('--areas', nargs='+', type=str, default=['kiyosumi', 'kib
 model_arg.add_argument('--areas_est', nargs='+', type=str, default=['kiyosumi', 'kiba'], help='areas to be analyzed ("All" is also possible)')
 model_arg.add_argument('--mixedVars', nargs='+', type=str, default=['Tree', 'Bldg', 'Road', 'Sky', 'Dist'], help='variable names for random coefficients')
 model_arg.add_argument('--spatialLag', type=str2bool, default=True, help='whether to consider spatial lag')
+model_arg.add_argument('--sp_key', type=str, default='adjacency', help='spatial weight matrix')
+model_arg.add_argument('--nNeighbor', type=int, default=3, help='number of neighbors to define spatial weight matrix')
+model_arg.add_argument('--dist_neighbor', type=float, default=200, help='distance within which neighbors exist')
+
 
 
 def get_config():
@@ -56,10 +60,11 @@ if __name__ == "__main__":
     try:
         os.makedirs(out_dir, exist_ok = False)
     except:
-        os.makedirs(out_dir + '_' + time.strftime("%Y%m%dT%H%M"), exist_ok = False)
+        out_dir += '_' + time.strftime("%Y%m%dT%H%M")
+        os.makedirs(out_dir, exist_ok = False)
 
     ## define dataset
-    sp_data = spDataset()
+    sp_data = spDataset(sp_key=config.sp_key, k=config.nNeighbor, d_lim=config.dist_neighbor)
     for area in config.areas:
         user_df = pd.read_csv(f'data/users_{area}.csv').set_index('user')
         street_df = pd.read_csv(f'data/streets_{area}.csv').set_index('street_id')
@@ -94,7 +99,7 @@ if __name__ == "__main__":
             nRnd += 1
         else:
             features[i] = [vname, v, s, 1]
-    print(features)
+    # print(features)
     sp_data.set_features(features)
     sp_data.merge_data()
 
@@ -136,7 +141,7 @@ if __name__ == "__main__":
 
     # %%
     fitDf = pd.DataFrame(fits)
-    fitDf.to_csv(f'{out_dir}/{model_name}Fit.csv', index=True)
+    fitDf.to_csv(f'{out_dir}/{model_name}_Fit.csv', index=True)
 
     with open(os.path.join(out_dir, "config.json"), mode="w") as f:
         json.dump(config.__dict__, f, indent=4)

@@ -97,7 +97,8 @@ if __name__ == '__main__':
     try:
         os.makedirs(out_dir, exist_ok = False)
     except:
-        os.makedirs(out_dir + '_' + time.strftime("%Y%m%dT%H%M"), exist_ok = False)
+        out_dir += '_' + time.strftime("%Y%m%dT%H%M")
+        os.makedirs(out_dir, exist_ok = False)
 
     # generate synthetic data
     nInd, nSpc = config.nInd, config.nSpc
@@ -109,6 +110,7 @@ if __name__ == '__main__':
     # %%
     res = {}
     for rho in rhos:
+        print(f"Run with rho = {rho}")
         x, xFix, xRnd, y, W = generate_data(nInd, nSpc, np.array(config.paramFix), 
                                             np.array(config.paramRnd_mean), np.array(config.paramRnd_std), rho)
 

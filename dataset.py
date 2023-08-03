@@ -1,3 +1,4 @@
+# %%
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, csc_matrix
@@ -11,7 +12,7 @@ def get_incidence_matrix(nSpc, angle_df, angle=True):
         A: incidence matrix in csr_matrix format
     """
     if angle:
-        ele = (180. - angle_df[key]) / 180.
+        ele = (180. - angle_df["angle"]) / 180.
     else:
         ele = np.ones(len(angle_df), dtype=np.float64) # basic incidence
     A = csr_matrix(
@@ -44,7 +45,7 @@ def get_spatial_weight_matrix(dist_mtrx, key='exp', scale=1., k=3, d_lim=100):
             ds_sorted = np.sort(ds)
             hot_idxs = np.where(ds <= ds_sorted[k+1])
             W[i, hot_idxs] = 1
-    elif key == 'nearest_dist':
+    elif key == 'nearest_dist': ## currently, this should not be used
         W = np.zeros_like(dist_mtrx)
         for i in range(nSpc):
             ds = dist_mtrx[i]
@@ -52,7 +53,7 @@ def get_spatial_weight_matrix(dist_mtrx, key='exp', scale=1., k=3, d_lim=100):
             hot_idxs = np.where(ds <= ds_sorted[k+1])
             W[i, hot_idxs] = ds[hot_idxs]
     elif key == 'within':
-        W = (dist_mtrx <= d_lim)
+        W = (dist_mtrx <= d_lim) * 1.
     elif key == 'power':
         d = np.clip(dist_mtrx/100, 1., None)
         W = 1./(d ** scale)
@@ -67,7 +68,7 @@ def get_spatial_weight_matrix(dist_mtrx, key='exp', scale=1., k=3, d_lim=100):
 
 class spDataset(object):
 
-    def __init__(self, sp_key='adjacency', scale=1., k=3, d_lim=100):
+    def __init__(self, sp_key='adjacency', scale=1., k=3, d_lim=200):
         self.areas = []
         self.datasets = {}
         self.sp_key = sp_key
