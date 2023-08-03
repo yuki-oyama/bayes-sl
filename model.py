@@ -217,14 +217,17 @@ class spLogit(object):
                 self.update_rho()
             if iter >= nIterBurn:
                 s = iter - nIterBurn
-                mu = np.einsum('nsk,nk->ns', self.AiX, self.paramAll)
+                # mu = np.einsum('nsk,nk->ns', self.AiX, self.paramAll)
+                mu = np.zeros((self.nInd, self.nSpc), dtype=np.float64)
                 if self.nFix > 0:
                     post_paramFix[s] = self.paramFix
+                    mu += self.AiX[:,:,:self.nFix] @ self.paramFix
                 if self.nRnd > 0:
                     post_paramRnd[s] = self.paramRnd
                     post_zeta[s] = self.zeta
                     post_Sigma[s] = self.Sigma
                     post_iwDiagA[s] = self.iwDiagA
+                    mu += np.einsum('nsk,nk->ns', self.AiX[:,:,self.nFix:], self.paramRnd)
                 post_rho[s] = self.rho
                 post_omega[s] = self.omega
                 post_y[s] = np.exp(mu) / (1 + np.exp(mu))
