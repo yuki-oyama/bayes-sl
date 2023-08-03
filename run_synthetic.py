@@ -1,11 +1,52 @@
+import os
 import numpy as np
 import pandas as pd
+import time
 from sklearn.neighbors import NearestNeighbors
 import scipy.sparse as sp
-from scipy.sparse import csr_matrix, csc_matrix
 from icecream import ic
 from model import spLogit
+import json
+import argparse
 
+#### argparse ####
+parser = argparse.ArgumentParser(description='Configuration file')
+arg_lists = []
+def add_argument_group(name):
+    arg = parser.add_argument_group(name)
+    arg_lists.append(arg)
+    return arg
+
+def str2bool(v):
+  return v.lower() in ('true', '1')
+
+def float_or_none(value):
+    try:
+        return float(value)
+    except:
+        return None
+
+# Model parameters
+model_arg = add_argument_group('Model')
+model_arg.add_argument('--seed', type=int, default=123, help='random seed')
+model_arg.add_argument('--root', type=str, default=None, help='root directory to save results')
+model_arg.add_argument('--out_dir', type=str, default='test', help='output directory to be created')
+model_arg.add_argument('--nInd', type=int, default=50, help='number of individuals')
+model_arg.add_argument('--nSpc', type=int, default=200, help='number of spatial units')
+model_arg.add_argument('--paramFix', nargs='+', type=float, default=[0.2, -0.5, 0.4, 0.09], help='true parameters for fixed effects')
+model_arg.add_argument('--paramRnd_mean', nargs='+', type=float, default=[0.1, -2.0], help='true mean parameters for random effects')
+model_arg.add_argument('--paramRnd_std', nargs='+', type=float, default=[0.2, 0.5], help='true std parameters for random effects')
+model_arg.add_argument('--rhos', nargs='+', type=float, default=[0.4], help='true spatial parameter (for multiple times of tests)')
+model_arg.add_argument('--nIter', type=int, default=1000, help='number of iterations')
+model_arg.add_argument('--nIterBurn', type=int, default=500, help='number of the first iterations for burn-in')
+model_arg.add_argument('--nGrid', type=int, default=100, help='number of grids for griddy Gibbs sampler')
+
+
+def get_config():
+  config, unparsed = parser.parse_known_args()
+  return config, unparsed
+
+#### Main Codes ####
 def generate_data(
         nInd, nSpc,
         paramFix=np.array([0.2, -0.5, 0.4, 0.09]),
@@ -15,6 +56,8 @@ def generate_data(
         ):
     nFix = paramFix.shape[0]
     nRnd = paramRnd_mean.shape[0]
+    assert nRnd == paramRnd_std.shape[0], "mean and std shapes must be equal to each other!"
+
     x = np.random.normal(size=(nInd,nSpc,nFix+nRnd))
     x -= np.mean(x, axis=1, keepdims=True)
     x /= np.std(x, axis=1, keepdims=True)
@@ -43,30 +86,48 @@ def generate_data(
 
 # %%
 if __name__ == '__main__':
+    config, _ = get_config()
+    
+    # output directory
+    if config.root is not None:
+        out_dir = os.path.join(config.root, "results", "synthetic", config.out_dir)
+    else:
+        out_dir = os.path.join("results", "synthetic", config.out_dir)
+    
+    try:
+        os.makedirs(out_dir, exist_ok = False)
+    except:
+        os.makedirs(out_dir + '_' + time.strftime("%Y%m%dT%H%M"), exist_ok = False)
+
     # generate synthetic data
-    nInd, nSpc = 50, 200
-    nFix, nRnd = 4, 2
+    nInd, nSpc = config.nInd, config.nSpc
+    nFix, nRnd = len(config.paramFix), len(config.paramRnd_mean)
     xFixName = [f'alpha{str(i+1)}' for i in range(nFix)]
     xRndName = [f'beta{str(i+1)}' for i in range(nRnd)]
-    rhos = [0.2] #[-0.9 + i*0.1 for i in range(19)]
+    rhos = config.rhos
 
     # %%
     res = {}
     for rho in rhos:
-        x, xFix, xRnd, y, W = generate_data(nInd, nSpc, rho=rho)
+        x, xFix, xRnd, y, W = generate_data(nInd, nSpc, np.array(config.paramFix), 
+                                            np.array(config.paramRnd_mean), np.array(config.paramRnd_std), rho)
 
-        seed = 111
         rho_a = 1.01
         A = 1.04
         nu = 2
-        splogit = spLogit(seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
+        splogit = spLogit(config.seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
 
-        postRes, modelFits, postParams = splogit.estimate(nIter=1000, nIterBurn=500, nGrid=100)
+        postRes, modelFits, postParams = splogit.estimate(nIter=config.nIter, nIterBurn=config.nIterBurn, nGrid=config.nGrid)
 
         dfRes = pd.DataFrame(postRes).T
-        # dfRes
         res[rho] = dfRes['mean']
 
     # %%
-    # resDf = pd.DataFrame(res)
-    # resDf.to_csv('results/synthetic/res_iter10000_burn5000.csv', index=True)
+    # write results
+    file_path = os.path.join(out_dir, "res.csv")
+    
+    resDf = pd.DataFrame(res)
+    resDf.to_csv(file_path, index=True)
+
+    with open(os.path.join(out_dir, "config.json"), mode="w") as f:
+        json.dump(config.__dict__, f, indent=4)

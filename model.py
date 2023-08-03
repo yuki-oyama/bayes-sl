@@ -175,7 +175,7 @@ class spLogit(object):
         if self.Sigma_inits is None:
             self.Sigma_inits = 0.1 * np.eye(self.nRnd)
         if self.priMuFix is None:
-            self.priMuFix = np.zeros((self.nFix,), dtype=np.float)
+            self.priMuFix = np.zeros((self.nFix,), dtype=np.float64)
         if self.priVarFix is None:
             self.priVarFix = sp.identity(self.nFix, format='csc') * 1e-1
         if self.nFix > 0:

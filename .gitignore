@@ -6,3 +6,4 @@ data/.DS_Store
 # folders
 misc/
 yuki/
+__pycache__/
