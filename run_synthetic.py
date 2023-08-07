@@ -78,7 +78,7 @@ def generate_data(
     # observation
     paramRnd = paramRnd_mean + (np.diag(paramRnd_std) @ np.random.randn(nRnd,nInd)).T
     paramAll = np.concatenate([np.tile(paramFix, (nInd,1)), paramRnd], axis=1)
-    mu = np.einsum('nsk,nk->ns', x, paramAll) + np.random.randn(nInd, nSpc)
+    mu = np.einsum('nsk,nk->ns', x, paramAll) #+ np.random.randn(nInd, nSpc)
     mu = np.einsum('ij,nj->ni', invA.toarray(), mu)
     prob = 1 / (1 + np.exp(-mu))
     y = np.random.binomial(1, prob)
