@@ -142,7 +142,9 @@ class spLogit(object):
         # draw rho by griddy Gibbs sampler
         yMu = np.einsum('rnsk,nk->rns', self.yAiXs, self.paramAll) # y_ni * u_ni
         Mu = np.einsum('rnsk,nk->rns', self.AiXs, self.paramAll) # u_ni
-        LL = yMu.sum(axis=(1,2)) - np.log(1 + np.exp(Mu)).sum(axis=(1,2)) # (nGrid,) taking sum_n sum_i y_ni * u_ni - log(1 + exp(u_ni))
+        deno = Mu.copy()
+        deno[Mu < 500] = np.log(1 + np.exp(Mu[Mu < 500]))
+        LL = yMu.sum(axis=(1,2)) - deno.sum(axis=(1,2)) # (nGrid,) taking sum_n sum_i y_ni * u_ni - log(1 + exp(u_ni))
         LL += np.log(self.beta_prob(self.rhos, self.rho_a)) # prior prob of rho
         p = np.exp(LL - np.max(LL)) # normalized joint prob: p(y|rho,beta) * p(rho)
         # approximate integral by piecewise linear, thus trapezoid: (rho_{i+1} - rho_i) * (p_i + p_{i+1}) / 2
@@ -230,7 +232,7 @@ class spLogit(object):
                     mu += np.einsum('nsk,nk->ns', self.AiX[:,:,self.nFix:], self.paramRnd)
                 post_rho[s] = self.rho
                 post_omega[s] = self.omega
-                post_y[s] = np.exp(mu) / (1 + np.exp(mu))
+                post_y[s] = 1 / (1 + np.exp(-mu))
 
         postParams = {
             'rho': post_rho,
@@ -241,8 +243,11 @@ class spLogit(object):
             'y': post_y,
         }
         postRes = self.analyze_posterior(post_rho, post_paramFix, post_paramRnd, post_zeta, post_Sigma)
+        elasRes, meRes = self.compute_effect_size(post_paramFix, post_paramRnd, post_y)
         modelFits = self.evaluate_modelfit(post_y)
-        return postRes, modelFits, postParams
+        logLike = self.simloglike(postParams)
+        modelFits.update({"SimLogLik": logLike})
+        return postRes, modelFits, postParams, elasRes, meRes
 
     def analyze_posterior(self,
             post_rho, post_paramFix, post_paramRnd,
@@ -291,6 +296,33 @@ class spLogit(object):
             '97.5%': postQr
         }
 
+    def compute_effect_size(self, post_paramFix, post_paramRnd, post_y):
+        elasRes = {}
+        meRes = {}
+        # fixed parameters
+        y_pred = post_y.mean(axis=0) # N x S
+        postMean_paramFix = post_paramFix.mean(axis=0) # Kf
+        postMean_paramRnd = post_paramRnd.mean(axis=0) # N x Kr
+        if self.nFix > 0:
+            elasFix = np.einsum('ns,k->nsk', y_pred, postMean_paramFix)
+            elasFix = self.xFix * elasFix # N x S x Kf
+            elasFix = elasFix.reshape(self.nInd*self.nSpc, self.nFix) # NS x Kf
+            meFix = np.einsum('ns,k->nsk', y_pred*(1-y_pred), postMean_paramFix)
+            meFix = meFix.reshape(self.nInd*self.nSpc, self.nFix) # NS x Kf
+            for k, paramName in enumerate(self.xFixName):
+                elasRes[paramName + 'Fix'] = self.get_postStats(elasFix[:,k])
+                meRes[paramName + 'Fix'] = self.get_postStats(meFix[:,k])
+        if self.nRnd > 0:
+            elasRnd = np.einsum('ns,nk->nsk', y_pred, postMean_paramRnd)
+            elasRnd = self.xRnd * elasRnd # N x S x Kr
+            elasRnd = elasRnd.reshape(self.nInd*self.nSpc, self.nRnd) # NS x Kr
+            meRnd = np.einsum('ns,nk->nsk', y_pred*(1-y_pred), postMean_paramRnd)
+            meRnd = meRnd.reshape(self.nInd*self.nSpc, self.nRnd) # NS x Kr
+            for k, paramName in enumerate(self.xRndName):
+                elasRes[paramName + 'Rnd'] = self.get_postStats(elasRnd[:,k])
+                meRes[paramName + 'Rnd'] = self.get_postStats(meRnd[:,k])
+        return elasRes, meRes
+
     def evaluate_modelfit(self, post_y):
         nRetain = post_y.shape[0]
         # log pointwise predictive density
@@ -299,12 +331,52 @@ class spLogit(object):
             for s in range(self.nSpc):
                 y_pred = post_y[:,n,s]
                 if self.y[n,s] == 1:
-                    LPPD += np.log(y_pred).sum() / nRetain
+                    # LPPD += np.log(y_pred).sum() / nRetain
+                    LPPD += np.log(y_pred.mean())
                 else:
-                    LPPD += np.log(1-y_pred).sum() / nRetain
+                    # LPPD += np.log(1-y_pred).sum() / nRetain
+                    LPPD += np.log(1-y_pred.mean())
         yMean = np.mean(post_y, axis = 0)
         # root mean square error
         RSME = np.sqrt(((yMean - self.y)**2).sum() / (self.nInd * self.nSpc))
         # first preference recovery
         FPR = 1 - np.abs((yMean > 0.5) - self.y).sum() / (self.nInd * self.nSpc)
         return {'LPPD': LPPD, 'RSME': RSME, 'FPR': FPR}
+
+    def simloglike(self, postParams):
+        simDraws = 1000
+        if self.nFix > 0 and self.nRnd == 0:
+            simDraws_star = 1
+        else:
+            simDraws_star = simDraws
+        
+        pSim = np.zeros((simDraws_star, self.nInd, self.nSpc))
+        
+        paramFix = 0
+        paramRnd = 0
+        if self.nFix > 0: paramFix = postParams['paramFix'].mean(axis=0)
+        if self.nRnd > 0: postMean_chSigma = np.linalg.cholesky(postParams['Sigma'].mean(axis=0))
+
+        for i in np.arange(simDraws_star):
+            if self.nRnd > 0:
+                paramRnd = postParams['zeta'].mean(axis=0) + (postMean_chSigma @ np.random.randn(self.nRnd, self.nInd)).T
+            mu = np.zeros((self.nInd, self.nSpc), dtype=np.float64)
+            if self.nFix > 0:
+                mu += self.AiX[:,:,:self.nFix] @ paramFix
+            if self.nRnd > 0:
+                mu += np.einsum('nsk,nk->ns', self.AiX[:,:,self.nFix:], paramRnd)
+            mu = np.clip(mu, -100, 100)
+            pSim[i, :, :] = 1 / (1 + np.exp(-mu))
+        
+        logLik = 0.
+        pSimMean = pSim.mean(axis=0)
+        for n in range(self.nInd):
+            for s in range(self.nSpc):
+                if self.y[n,s] == 1:
+                    logLik += np.log(pSimMean[n,s])
+                else:
+                    logLik += np.log(1-pSimMean[n,s])
+        
+        print(' ')
+        print('Log-likelihood (simulated at posterior means): ' + str(logLik)) 
+        return logLik

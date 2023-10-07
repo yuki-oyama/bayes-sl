@@ -1,3 +1,4 @@
+# %%
 import os
 import numpy as np
 import pandas as pd
@@ -50,6 +51,7 @@ def get_config():
 #### Main Codes ####
 if __name__ == "__main__":
     config, _ = get_config()
+    np.random.seed(config.seed)
     
     # output directory
     if config.root is not None:
@@ -129,7 +131,7 @@ if __name__ == "__main__":
         d = sp_data.datasets[area]
         splogit = spLogit(seed=seed, A=A, nu=nu, rho_a=rho_a, spatialLag=config.spatialLag)
         splogit.load_data_from_spData(d)
-        postRes, modelFits, postParams = splogit.estimate(nIter=nIter, nIterBurn=nIterBurn, nGrid=nGrid)
+        postRes, modelFits, postParams, elasRes, meRes = splogit.estimate(nIter=nIter, nIterBurn=nIterBurn, nGrid=nGrid)
         dfRes = pd.DataFrame(postRes).T
         print(dfRes)
         estDfs[area] = dfRes
