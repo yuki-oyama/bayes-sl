@@ -42,6 +42,7 @@ model_arg.add_argument('--nIter', type=int, default=1000, help='number of iterat
 model_arg.add_argument('--nIterBurn', type=int, default=500, help='number of the first iterations for burn-in')
 model_arg.add_argument('--nGrid', type=int, default=100, help='number of grids for griddy Gibbs sampler')
 model_arg.add_argument('--iterThin', type=int, default=1, help='retain posterior draw for every X draws after burn-in')
+model_arg.add_argument('--eval_effect', type=str2bool, default=False, help='if evaluating effect sizes or not (slow)')
 
 def get_config():
   config, unparsed = parser.parse_known_args()
@@ -86,6 +87,55 @@ def generate_data(
     prob = 1 / (1 + np.exp(-mu))
     y = np.random.binomial(1, prob)
 
+    d_elasFix = np.zeros(shape=(nFix,nInd))
+    id_elasFix = np.zeros(shape=(nFix,nInd))
+    d_meFix = np.zeros(shape=(nFix,nInd))
+    id_meFix = np.zeros(shape=(nFix,nInd))
+    d_elasRnd = np.zeros(shape=(nRnd,nInd))
+    id_elasRnd = np.zeros(shape=(nRnd,nInd))
+    d_meRnd = np.zeros(shape=(nRnd,nInd))
+    id_meRnd = np.zeros(shape=(nRnd,nInd))
+    I = I.toarray()
+    for k in range(nFix):
+        for n in range(nInd):
+            pn = prob[n,:]
+            xnk = xFix[n,:,k]
+            ak = paramFix[k]
+            elas_nk = (1 - pn[:,np.newaxis]) * xnk[np.newaxis,:] * invA.toarray() * ak
+            me_nk = pn[:,np.newaxis] * (1 - pn[:,np.newaxis]) * invA.toarray() * ak
+            d_elasFix[k,n] = np.diag(elas_nk).mean()
+            id_elasFix[k,n] = elas_nk.sum() / nSpc - d_elasFix[k,n]
+            d_meFix[k,n] = np.diag(me_nk).mean()
+            id_meFix[k,n] = me_nk.sum() / nSpc - d_meFix[k,n]
+    for k in range(nRnd):
+        for n in range(nInd):
+            pn = prob[n,:]
+            xnk = xRnd[n,:,k]
+            bnk = paramRnd[n,k]
+            elas_nk = (1 - pn[:,np.newaxis]) * xnk[np.newaxis,:] * invA.toarray() * bnk
+            me_nk = pn[:,np.newaxis] * (1 - pn[:,np.newaxis]) * invA.toarray() * bnk
+            d_elasRnd[k,n] = np.diag(elas_nk).mean()
+            id_elasRnd[k,n] = elas_nk.sum() / nSpc - d_elasRnd[k,n]
+            d_meRnd[k,n] = np.diag(me_nk).mean()
+            id_meRnd[k,n] = me_nk.sum() / nSpc - d_meRnd[k,n]
+    d_elasFix = d_elasFix.mean(axis=1)
+    id_elasFix = id_elasFix.mean(axis=1)
+    d_elasRnd = d_elasRnd.mean(axis=1)
+    id_elasRnd = id_elasRnd.mean(axis=1)
+    d_meFix = d_meFix.mean(axis=1)
+    id_meFix = id_meFix.mean(axis=1)
+    d_meRnd = d_meRnd.mean(axis=1)
+    id_meRnd = id_meRnd.mean(axis=1)
+    print("Elasticities")
+    print(d_elasFix)
+    print(id_elasFix)
+    print(d_elasRnd)
+    print(id_elasRnd)
+    print("Marginal effects")
+    print(d_meFix)
+    print(id_meFix)
+    print(d_meRnd)
+    print(id_meRnd)
     return x, xFix, xRnd, y, spW
 
 # %%
@@ -124,13 +174,19 @@ if __name__ == '__main__':
         rho_a = 1.01
         A = 1.04
         nu = 2
-        splogit = spLogit(config.seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName)
+        splogit = spLogit(config.seed, nInd, nSpc, nFix, nRnd, x, y, W, xFixName=xFixName, xRndName=xRndName, eval_effect=config.eval_effect)
 
-        postRes, modelFits, postParams, _, _ = splogit.estimate(nIter=config.nIter, nIterBurn=config.nIterBurn, nGrid=config.nGrid, iterThin=config.iterThin)
+        postRes, modelFits, postParams, elasRes, meRes = splogit.estimate(nIter=config.nIter, nIterBurn=config.nIterBurn, nGrid=config.nGrid, iterThin=config.iterThin)
 
         dfRes = pd.DataFrame(postRes).T
         res[rho] = dfRes['mean']
         print(dfRes)
+
+        if config.eval_effect:
+            elas = pd.DataFrame(elasRes).T
+            maref = pd.DataFrame(meRes).T
+            elas.to_csv(f'{out_dir}/elas_{rho}.csv', index=True)
+            maref.to_csv(f'{out_dir}/me_{rho}.csv', index=True)
 
     # %%
     # write results

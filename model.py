@@ -174,6 +174,7 @@ class spLogit(object):
         den = np.cumsum(postP)
         rnd = np.random.uniform() * np.sum(postP)
         idx = np.max(np.append([0], np.where(den <= rnd)))
+        self.idx = idx
         self.rho = self.rhos[idx]
         self.AiX = self.AiXs[idx]
         # self.Ai = self.Ais[idx]
@@ -192,6 +193,7 @@ class spLogit(object):
         post_rho = np.zeros(nRetain, dtype=np.float64)
         post_y = np.zeros((nRetain, self.nInd, self.nSpc), dtype=np.float64)
         post_omega = np.zeros((nRetain, self.nInd, self.nSpc), dtype=np.float64)
+        post_idx = np.zeros(nRetain, dtype=np.int64)
 
         # init_params
         if self.paramFix_inits is None:
@@ -210,7 +212,7 @@ class spLogit(object):
         # pre-computation for griddy gibbs
         print("Pre-computation for Griddy Gibbs")
         if self.spatialLag:
-            # self.Ais = np.zeros((nGrid, self.nSpc, self.nSpc), dtype=np.float64)
+            self.Ais = np.zeros((nGrid, self.nSpc, self.nSpc), dtype=np.float64)
             self.AiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
             self.yAiXs = np.zeros((nGrid, self.nInd, self.nSpc, self.nFix+self.nRnd), dtype=np.float64)
             self.rhos = np.linspace(-1, 1, nGrid + 2)
@@ -218,7 +220,7 @@ class spLogit(object):
             for i in tqdm(range(nGrid)):
                 A = self.I - self.rhos[i] * self.W
                 invA = sp.linalg.inv(A).toarray()
-                # self.Ais[i] = invA
+                self.Ais[i] = invA
                 self.AiXs[i] = np.einsum('ij,njk->nik', invA, self.x)
                 self.yAiXs[i] = self.y[:,:,np.newaxis] * self.AiXs[i]
 
@@ -241,6 +243,7 @@ class spLogit(object):
             self.AiX = self.AiXs[nGrid//2] if self.spatialLag else self.x
         # self.epsilon = np.random.randn(self.nInd, self.nSpc)
         # self.AiE = np.einsum('ij,nj->ni', self.Ai, self.epsilon)
+        self.idx = nGrid//2
         
         # estimation
         print("Estimation")
@@ -272,6 +275,7 @@ class spLogit(object):
                     post_rho[s] = self.rho
                     post_omega[s] = self.omega
                     post_y[s] = 1 / (1 + np.exp(-mu))
+                    post_idx[s] = self.idx
 
         postParams = {
             'rho': post_rho,
@@ -283,7 +287,7 @@ class spLogit(object):
         }
         postRes = self.analyze_posterior(post_rho, post_paramFix, post_paramRnd, post_zeta, post_Sigma)
         if self.eval_effect:
-            elasRes, meRes = self.compute_effect_size(post_paramFix, post_paramRnd, post_y, post_rho)
+            elasRes, meRes = self.compute_effect_size(post_paramFix, post_paramRnd, post_y, post_idx)
         else:
             elasRes, meRes = None, None
         modelFits = self.evaluate_modelfit(post_y)
@@ -342,7 +346,7 @@ class spLogit(object):
             '97.5%': postQr
         }
     
-    def compute_effect_size(self, post_paramFix, post_paramRnd, post_y, post_rho):
+    def compute_effect_size_prev(self, post_paramFix, post_paramRnd, post_y, post_rho):
         elasRes = {}
         meRes = {}
         # fixed parameters
@@ -412,6 +416,110 @@ class spLogit(object):
                         id_me = yR * (1 - yR) * betaR * (post_rho * self.W[i].sum())
                         d_meK.append(self.get_postStats(d_me))
                         id_meK.append(self.get_postStats(id_me))
+                d_eDf = pd.DataFrame(d_elasK)
+                d_mDf = pd.DataFrame(d_meK)
+                id_eDf = pd.DataFrame(id_elasK)
+                id_mDf = pd.DataFrame(id_meK)
+                elasRes[paramName + 'Rnd' + 'Direct'] = {
+                    'mean': d_eDf['mean'].mean(),
+                    'std. dev.': d_eDf['std. dev.'].mean(),
+                    '2.5%': d_eDf['2.5%'].mean(),
+                    '97.5%': d_eDf['97.5%'].mean()
+                }
+                meRes[paramName + 'Rnd' + 'Direct'] = {
+                    'mean': d_mDf['mean'].mean(),
+                    'std. dev.': d_mDf['std. dev.'].mean(),
+                    '2.5%': d_mDf['2.5%'].mean(),
+                    '97.5%': d_mDf['97.5%'].mean()
+                }
+                elasRes[paramName + 'Rnd' + 'InDirect'] = {
+                    'mean': id_eDf['mean'].mean(),
+                    'std. dev.': id_eDf['std. dev.'].mean(),
+                    '2.5%': id_eDf['2.5%'].mean(),
+                    '97.5%': id_eDf['97.5%'].mean()
+                }
+                meRes[paramName + 'Rnd' + 'InDirect'] = {
+                    'mean': id_mDf['mean'].mean(),
+                    'std. dev.': id_mDf['std. dev.'].mean(),
+                    '2.5%': id_mDf['2.5%'].mean(),
+                    '97.5%': id_mDf['97.5%'].mean()
+                }
+        return elasRes, meRes
+
+    def compute_effect_size(self, post_paramFix, post_paramRnd, post_y, post_idx):
+        elasRes = {}
+        meRes = {}
+        nRetain = post_idx.shape[0]
+        post_Ai = self.Ais[post_idx]
+        I = self.I.toarray()
+        # fixed parameters
+        if self.nFix > 0:
+            for k in range(self.nFix):
+                paramName = self.xFixName[k]
+                alphaR = post_paramFix[:,k] # R x 1
+                d_elasK, d_meK = [], []
+                id_elasK, id_meK = [], []
+                for n in range(self.nInd):
+                    yR = post_y[:,n,:] # R x S
+                    xf = self.xFix[n,:,k] # S x 1 (j)
+                    elas_nk = (1 - yR[:,:,np.newaxis]) * xf[np.newaxis,np.newaxis,:] * \
+                                post_Ai * alphaR[:,np.newaxis,np.newaxis] # R x S x S
+                    me_nk = yR[:,:,np.newaxis] * (1 - yR[:,:,np.newaxis]) * post_Ai * alphaR[:,np.newaxis,np.newaxis] # R x S x S
+                    d_elas_nk = (elas_nk * I[np.newaxis,:,:]).sum(axis=(1,2)) / self.nSpc # R x 1
+                    id_elas_nk = elas_nk.sum(axis=(1,2)) / self.nSpc - d_elas_nk # R x 1
+                    d_me_nk = (me_nk * I[np.newaxis,:,:]).sum(axis=(1,2)) / self.nSpc # R x 1
+                    id_me_nk = me_nk.sum(axis=(1,2)) / self.nSpc - d_me_nk # R x 1
+                    d_elasK.append(self.get_postStats(d_elas_nk))
+                    id_elasK.append(self.get_postStats(id_elas_nk))
+                    d_meK.append(self.get_postStats(d_me_nk))
+                    id_meK.append(self.get_postStats(id_me_nk))
+                d_eDf = pd.DataFrame(d_elasK)
+                d_mDf = pd.DataFrame(d_meK)
+                id_eDf = pd.DataFrame(id_elasK)
+                id_mDf = pd.DataFrame(id_meK)
+                elasRes[paramName + 'Fix' + 'Direct'] = {
+                    'mean': d_eDf['mean'].mean(),
+                    'std. dev.': d_eDf['std. dev.'].mean(),
+                    '2.5%': d_eDf['2.5%'].mean(),
+                    '97.5%': d_eDf['97.5%'].mean()
+                }
+                meRes[paramName + 'Fix' + 'Direct'] = {
+                    'mean': d_mDf['mean'].mean(),
+                    'std. dev.': d_mDf['std. dev.'].mean(),
+                    '2.5%': d_mDf['2.5%'].mean(),
+                    '97.5%': d_mDf['97.5%'].mean()
+                }
+                elasRes[paramName + 'Fix' + 'InDirect'] = {
+                    'mean': id_eDf['mean'].mean(),
+                    'std. dev.': id_eDf['std. dev.'].mean(),
+                    '2.5%': id_eDf['2.5%'].mean(),
+                    '97.5%': id_eDf['97.5%'].mean()
+                }
+                meRes[paramName + 'Fix' + 'InDirect'] = {
+                    'mean': id_mDf['mean'].mean(),
+                    'std. dev.': id_mDf['std. dev.'].mean(),
+                    '2.5%': id_mDf['2.5%'].mean(),
+                    '97.5%': id_mDf['97.5%'].mean()
+                }
+        if self.nRnd > 0:
+            for k in range(self.nRnd):
+                paramName = self.xRndName[k]
+                d_elasK, d_meK = [], []
+                id_elasK, id_meK = [], []
+                for n in range(self.nInd):
+                    yR = post_y[:,n,:] # R x S
+                    xf = self.xRnd[n,:,k] # S x 1 (j)
+                    betaR = post_paramRnd[:,n,k] # R x 1
+                    elas_nk = (1 - yR[:,:,np.newaxis]) * xf[np.newaxis,np.newaxis,:] * post_Ai * betaR[:,np.newaxis,np.newaxis] # R x S x S
+                    me_nk = yR[:,:,np.newaxis] * (1 - yR[:,:,np.newaxis]) * post_Ai * betaR[:,np.newaxis,np.newaxis] # R x S x S
+                    d_elas_nk = (elas_nk * I[np.newaxis,:,:]).sum(axis=(1,2)) / self.nSpc # R x 1
+                    id_elas_nk = elas_nk.sum(axis=(1,2)) / self.nSpc - d_elas_nk # R x 1
+                    d_me_nk = (me_nk * I[np.newaxis,:,:]).sum(axis=(1,2)) / self.nSpc # R x 1
+                    id_me_nk = me_nk.sum(axis=(1,2)) / self.nSpc - d_me_nk # R x 1
+                    d_elasK.append(self.get_postStats(d_elas_nk))
+                    id_elasK.append(self.get_postStats(id_elas_nk))
+                    d_meK.append(self.get_postStats(d_me_nk))
+                    id_meK.append(self.get_postStats(id_me_nk))
                 d_eDf = pd.DataFrame(d_elasK)
                 d_mDf = pd.DataFrame(d_meK)
                 id_eDf = pd.DataFrame(id_elasK)
