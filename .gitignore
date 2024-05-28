@@ -8,6 +8,7 @@ model_before_share.py
 results/rlst_20230119.txt
 results/synthetic/res_iter10000_burn5000.csv
 results/synthetic/res.csv
+diagnostic_real.py
 
 # folders
 misc/
