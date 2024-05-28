@@ -14,11 +14,13 @@ If you find this code useful, please cite the paper:
   volume = {},
   pages = {},
   year = {2024},
-  doi = {https://doi.org/10.1016/j.tra.2024.103998},
-  url = {https://www.sciencedirect.com/science/article/pii/S0965856424000466},
+  doi = {},
+  url = {},
   author = {Oyama, Yuki and Murakami, Daisuke and Krueger, Rico},
 }
 ```
+
+Note: the information of volume, pages, doi, and url will be updated once revealed.
 
 ## Quick Start with Synthetic Data
 **Estimate** a Bayesian spatial logit model with synthetic data, e.g., where the number of individual is 50 and that of spatial units is 200.
