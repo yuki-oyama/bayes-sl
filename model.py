@@ -456,10 +456,13 @@ class spLogit(object):
         if self.nFix > 0:
             for k in range(self.nFix):
                 paramName = self.xFixName[k]
+                if paramName not in ["InRiver", "InAvenue"]:
+                    continue
+                print(f"Evaluating fixed effects for {paramName}...")
                 alphaR = post_paramFix[:,k] # R x 1
                 d_elasK, d_meK = [], []
                 id_elasK, id_meK = [], []
-                for n in range(self.nInd):
+                for n in tqdm(range(self.nInd)):
                     yR = post_y[:,n,:] # R x S
                     xf = self.xFix[n,:,k] # S x 1 (j)
                     elas_nk = (1 - yR[:,:,np.newaxis]) * xf[np.newaxis,np.newaxis,:] * \
@@ -504,9 +507,12 @@ class spLogit(object):
         if self.nRnd > 0:
             for k in range(self.nRnd):
                 paramName = self.xRndName[k]
+                if paramName not in ["Dist", "Tree", "Bldg", "Road", "Sky"]:
+                    continue
+                print(f"Evaluating random effects for {paramName}...")
                 d_elasK, d_meK = [], []
                 id_elasK, id_meK = [], []
-                for n in range(self.nInd):
+                for n in tqdm(range(self.nInd)):
                     yR = post_y[:,n,:] # R x S
                     xf = self.xRnd[n,:,k] # S x 1 (j)
                     betaR = post_paramRnd[:,n,k] # R x 1

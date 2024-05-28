@@ -3,8 +3,11 @@
 results/.DS_Store
 data/.DS_Store
 environment.yml
+run_real.py
 
 # folders
 misc/
 yuki/
 __pycache__/
+data/
+results/
