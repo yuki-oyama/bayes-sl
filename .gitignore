@@ -6,8 +6,8 @@ environment.yml
 run_real.py
 model_before_share.py
 results/rlst_20230119.txt
-results/res_iter10000_burn5000.csv
-results/res.csv
+results/synthetic/res_iter10000_burn5000.csv
+results/synthetic/res.csv
 
 # folders
 misc/
