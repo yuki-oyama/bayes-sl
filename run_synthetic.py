@@ -31,7 +31,7 @@ def float_or_none(value):
 model_arg = add_argument_group('Model')
 model_arg.add_argument('--seed', type=int, default=123, help='random seed')
 model_arg.add_argument('--root', type=str, default=None, help='root directory to save results')
-model_arg.add_argument('--out_dir', type=str, default='test2', help='output directory to be created')
+model_arg.add_argument('--out_dir', type=str, default='test', help='output directory to be created')
 model_arg.add_argument('--nInd', type=int, default=50, help='number of individuals')
 model_arg.add_argument('--nSpc', type=int, default=200, help='number of spatial units')
 model_arg.add_argument('--paramFix', nargs='+', type=float, default=[0.2, -0.5, 0.4, 0.09], help='true parameters for fixed effects')

@@ -93,10 +93,6 @@ class spLogit(object):
             rnd_keys = [nm + 'Fix' for nm in self.xRndName]
             self.zeta_inits = param_df.loc[rnd_keys]['mean'].values
             self.Sigma_inits = np.diag(param_df.loc[rnd_keys]['std. dev.'].values)
-            # rndMean_keys = [nm + 'RndMean' for nm in self.xRndName]
-            # rndStd_keys = [nm + 'RndStd' for nm in self.xRndName]
-            # self.zeta_inits = param_df.loc[rndMean_keys]['mean'].values
-            # self.Sigma_inits = np.diag(param_df.loc[rndStd_keys]['mean'].values)
 
     def update_omega(self):
         mu = np.einsum('nsk,nk->ns', self.AiX, self.paramAll) #+ self.AiE
@@ -318,20 +314,6 @@ class spLogit(object):
                 for l, paramName2 in enumerate(self.xRndName):
                     if l > k:
                         postRes[paramName + '_' + paramName2 + '_Sigma'] = self.get_postStats(post_Sigma[:,k,l])
-            # paramRnd
-            # dim = (0,1)
-            # postMean = np.mean(post_paramRnd, axis = dim)
-            # postQl, postQr = np.quantile(post_paramRnd, [0.025, 0.975], axis = dim)
-            # postStd = np.std(post_paramRnd, axis = dim)
-            # paramRndFlat = post_paramRnd.reshape(-1, self.nRnd)
-            # postCorr = np.corrcoef(paramRndFlat[:,0], paramRndFlat[:,1])
-            # postRes['paramRnd'] = {
-            #     'mean': postMean,
-            #     'std. dev.': postStd,
-            #     '2.5%': postQl,
-            #     '97.5%': postQr,
-            #     'corr.': postCorr
-            # }
         return postRes
 
     def get_postStats(self, postParam):
@@ -345,106 +327,6 @@ class spLogit(object):
             '2.5%': postQl,
             '97.5%': postQr
         }
-    
-    def compute_effect_size_prev(self, post_paramFix, post_paramRnd, post_y, post_rho):
-        elasRes = {}
-        meRes = {}
-        # fixed parameters
-        if self.nFix > 0:
-            for k in range(self.nFix):
-                paramName = self.xFixName[k]
-                alphaR = post_paramFix[:,k] # R x 1
-                d_elasK, d_meK = [], []
-                id_elasK, id_meK = [], []
-                for n in range(self.nInd):
-                    for i in range(self.nSpc):
-                        yR = post_y[:,n,i] # R x 1
-                        xf = self.xFix[n,i,k] # Kf x 1
-                        wxf = self.W[i].dot(self.xFix[n,:,k]) # (1 x S) x (S x 1)
-                        d_elas = yR * alphaR * xf
-                        id_elas = yR * alphaR * (post_rho * wxf)
-                        d_elasK.append(self.get_postStats(d_elas))
-                        id_elasK.append(self.get_postStats(id_elas))
-                        d_me = yR * (1 - yR) * alphaR
-                        id_me = yR * (1 - yR) * alphaR * (post_rho * self.W[i].sum())
-                        d_meK.append(self.get_postStats(d_me))
-                        id_meK.append(self.get_postStats(id_me))
-                d_eDf = pd.DataFrame(d_elasK)
-                d_mDf = pd.DataFrame(d_meK)
-                id_eDf = pd.DataFrame(id_elasK)
-                id_mDf = pd.DataFrame(id_meK)
-                elasRes[paramName + 'Fix' + 'Direct'] = {
-                    'mean': d_eDf['mean'].mean(),
-                    'std. dev.': d_eDf['std. dev.'].mean(),
-                    '2.5%': d_eDf['2.5%'].mean(),
-                    '97.5%': d_eDf['97.5%'].mean()
-                }
-                meRes[paramName + 'Fix' + 'Direct'] = {
-                    'mean': d_mDf['mean'].mean(),
-                    'std. dev.': d_mDf['std. dev.'].mean(),
-                    '2.5%': d_mDf['2.5%'].mean(),
-                    '97.5%': d_mDf['97.5%'].mean()
-                }
-                elasRes[paramName + 'Fix' + 'InDirect'] = {
-                    'mean': id_eDf['mean'].mean(),
-                    'std. dev.': id_eDf['std. dev.'].mean(),
-                    '2.5%': id_eDf['2.5%'].mean(),
-                    '97.5%': id_eDf['97.5%'].mean()
-                }
-                meRes[paramName + 'Fix' + 'InDirect'] = {
-                    'mean': id_mDf['mean'].mean(),
-                    'std. dev.': id_mDf['std. dev.'].mean(),
-                    '2.5%': id_mDf['2.5%'].mean(),
-                    '97.5%': id_mDf['97.5%'].mean()
-                }
-        if self.nRnd > 0:
-            for k in range(self.nRnd):
-                paramName = self.xRndName[k]
-                d_elasK, d_meK = [], []
-                id_elasK, id_meK = [], []
-                for n in range(self.nInd):
-                    betaR = post_paramRnd[:,n,k] # R x 1
-                    for i in range(self.nSpc):
-                        yR = post_y[:,n,i] # R x 1
-                        xf = self.xRnd[n,i,k] # Kf x 1
-                        wxf = self.W[i].dot(self.xFix[n,:,k]) # (1 x S) x (S x 1)
-                        d_elas = yR * betaR * xf
-                        id_elas = yR * betaR * (post_rho * wxf)
-                        d_elasK.append(self.get_postStats(d_elas))
-                        id_elasK.append(self.get_postStats(id_elas))
-                        d_me = yR * (1 - yR) * betaR
-                        id_me = yR * (1 - yR) * betaR * (post_rho * self.W[i].sum())
-                        d_meK.append(self.get_postStats(d_me))
-                        id_meK.append(self.get_postStats(id_me))
-                d_eDf = pd.DataFrame(d_elasK)
-                d_mDf = pd.DataFrame(d_meK)
-                id_eDf = pd.DataFrame(id_elasK)
-                id_mDf = pd.DataFrame(id_meK)
-                elasRes[paramName + 'Rnd' + 'Direct'] = {
-                    'mean': d_eDf['mean'].mean(),
-                    'std. dev.': d_eDf['std. dev.'].mean(),
-                    '2.5%': d_eDf['2.5%'].mean(),
-                    '97.5%': d_eDf['97.5%'].mean()
-                }
-                meRes[paramName + 'Rnd' + 'Direct'] = {
-                    'mean': d_mDf['mean'].mean(),
-                    'std. dev.': d_mDf['std. dev.'].mean(),
-                    '2.5%': d_mDf['2.5%'].mean(),
-                    '97.5%': d_mDf['97.5%'].mean()
-                }
-                elasRes[paramName + 'Rnd' + 'InDirect'] = {
-                    'mean': id_eDf['mean'].mean(),
-                    'std. dev.': id_eDf['std. dev.'].mean(),
-                    '2.5%': id_eDf['2.5%'].mean(),
-                    '97.5%': id_eDf['97.5%'].mean()
-                }
-                meRes[paramName + 'Rnd' + 'InDirect'] = {
-                    'mean': id_mDf['mean'].mean(),
-                    'std. dev.': id_mDf['std. dev.'].mean(),
-                    '2.5%': id_mDf['2.5%'].mean(),
-                    '97.5%': id_mDf['97.5%'].mean()
-                }
-        return elasRes, meRes
 
     def compute_effect_size(self, post_paramFix, post_paramRnd, post_y, post_idx):
         elasRes = {}
@@ -456,8 +338,6 @@ class spLogit(object):
         if self.nFix > 0:
             for k in range(self.nFix):
                 paramName = self.xFixName[k]
-                if paramName not in ["InRiver", "InAvenue"]:
-                    continue
                 print(f"Evaluating fixed effects for {paramName}...")
                 alphaR = post_paramFix[:,k] # R x 1
                 d_elasK, d_meK = [], []
@@ -507,8 +387,6 @@ class spLogit(object):
         if self.nRnd > 0:
             for k in range(self.nRnd):
                 paramName = self.xRndName[k]
-                if paramName not in ["Dist", "Tree", "Bldg", "Road", "Sky"]:
-                    continue
                 print(f"Evaluating random effects for {paramName}...")
                 d_elasK, d_meK = [], []
                 id_elasK, id_meK = [], []

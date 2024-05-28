@@ -4,10 +4,15 @@ results/.DS_Store
 data/.DS_Store
 environment.yml
 run_real.py
+model_before_share.py
+results/rlst_20230119.txt
+results/res_iter10000_burn5000.csv
+results/res.csv
 
 # folders
 misc/
 yuki/
 __pycache__/
 data/
-results/
+results/mixed/
+results/modelcomparison_v230630/
