@@ -87,55 +87,6 @@ def generate_data(
     prob = 1 / (1 + np.exp(-mu))
     y = np.random.binomial(1, prob)
 
-    d_elasFix = np.zeros(shape=(nFix,nInd))
-    id_elasFix = np.zeros(shape=(nFix,nInd))
-    d_meFix = np.zeros(shape=(nFix,nInd))
-    id_meFix = np.zeros(shape=(nFix,nInd))
-    d_elasRnd = np.zeros(shape=(nRnd,nInd))
-    id_elasRnd = np.zeros(shape=(nRnd,nInd))
-    d_meRnd = np.zeros(shape=(nRnd,nInd))
-    id_meRnd = np.zeros(shape=(nRnd,nInd))
-    I = I.toarray()
-    for k in range(nFix):
-        for n in range(nInd):
-            pn = prob[n,:]
-            xnk = xFix[n,:,k]
-            ak = paramFix[k]
-            elas_nk = (1 - pn[:,np.newaxis]) * xnk[np.newaxis,:] * invA.toarray() * ak
-            me_nk = pn[:,np.newaxis] * (1 - pn[:,np.newaxis]) * invA.toarray() * ak
-            d_elasFix[k,n] = np.diag(elas_nk).mean()
-            id_elasFix[k,n] = elas_nk.sum() / nSpc - d_elasFix[k,n]
-            d_meFix[k,n] = np.diag(me_nk).mean()
-            id_meFix[k,n] = me_nk.sum() / nSpc - d_meFix[k,n]
-    for k in range(nRnd):
-        for n in range(nInd):
-            pn = prob[n,:]
-            xnk = xRnd[n,:,k]
-            bnk = paramRnd[n,k]
-            elas_nk = (1 - pn[:,np.newaxis]) * xnk[np.newaxis,:] * invA.toarray() * bnk
-            me_nk = pn[:,np.newaxis] * (1 - pn[:,np.newaxis]) * invA.toarray() * bnk
-            d_elasRnd[k,n] = np.diag(elas_nk).mean()
-            id_elasRnd[k,n] = elas_nk.sum() / nSpc - d_elasRnd[k,n]
-            d_meRnd[k,n] = np.diag(me_nk).mean()
-            id_meRnd[k,n] = me_nk.sum() / nSpc - d_meRnd[k,n]
-    d_elasFix = d_elasFix.mean(axis=1)
-    id_elasFix = id_elasFix.mean(axis=1)
-    d_elasRnd = d_elasRnd.mean(axis=1)
-    id_elasRnd = id_elasRnd.mean(axis=1)
-    d_meFix = d_meFix.mean(axis=1)
-    id_meFix = id_meFix.mean(axis=1)
-    d_meRnd = d_meRnd.mean(axis=1)
-    id_meRnd = id_meRnd.mean(axis=1)
-    print("Elasticities")
-    print(d_elasFix)
-    print(id_elasFix)
-    print(d_elasRnd)
-    print(id_elasRnd)
-    print("Marginal effects")
-    print(d_meFix)
-    print(id_meFix)
-    print(d_meRnd)
-    print(id_meRnd)
     return x, xFix, xRnd, y, spW
 
 # %%
