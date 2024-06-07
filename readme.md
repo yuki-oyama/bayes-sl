@@ -4,7 +4,7 @@ Python code for the estimation of a hierarchical Bayesian logit model for spatia
 ## Paper
 For more details, please see the paper
 
-Oyama, Y., Murakami, D., Krueger, R. (forthcoming) [A hierarchical Bayesian logit model for spatial multivariate choice data](https://doi.org/10.1016/j.jocm.2024.100503). Journal of Choice Modelling 52: 100503. 
+Oyama, Y., Murakami, D., Krueger, R. (2024) [A hierarchical Bayesian logit model for spatial multivariate choice data](https://doi.org/10.1016/j.jocm.2024.100503). Journal of Choice Modelling 52: 100503. 
 
 If you find this code useful, please cite the paper:
 ```
